@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -18,4 +19,10 @@ func RootPath() (s string) {
 	dir, _ := filepath.Abs(filepath.Dir(s))
 
 	return strings.ReplaceAll(dir, "\\", "/")
+}
+
+// GetPackageDir 获取当前函数所在包的目录
+func GetPackageDir() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Dir(filename)
 }
