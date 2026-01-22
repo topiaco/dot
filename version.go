@@ -3,6 +3,7 @@ package dot
 import (
 	"fmt"
 	"runtime/debug"
+	"time"
 )
 
 // VCSInfo 包含版本控制系统信息
@@ -23,7 +24,7 @@ func (v VCSInfo) String() string {
 func extractVCSInfo() VCSInfo {
 	info, _ := debug.ReadBuildInfo()
 	var revision string
-	var time string
+	var buildTime string
 	var modified bool
 
 	for _, setting := range info.Settings {
@@ -31,7 +32,16 @@ func extractVCSInfo() VCSInfo {
 		case "vcs.revision":
 			revision = setting.Value
 		case "vcs.time":
-			time = setting.Value
+			// 解析时间并转换为东八区
+			if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
+				// 创建东八区时区
+				tz := time.FixedZone("CST", 8*3600)
+				// 转换为东八区时间并格式化为 RFC3339
+				buildTime = t.In(tz).Format(time.RFC3339)
+			} else {
+				// 解析失败时使用原始时间
+				buildTime = setting.Value
+			}
 		case "vcs.modified":
 			modified = setting.Value == "true"
 		}
@@ -39,7 +49,7 @@ func extractVCSInfo() VCSInfo {
 
 	return VCSInfo{
 		Revision:  revision,
-		Time:      time,
+		Time:      buildTime,
 		GoVersion: info.GoVersion,
 		Modified:  modified,
 	}
