@@ -280,11 +280,7 @@ func (imp *ExcelImporter) Import(ctx context.Context, handler func(rowIndex int,
 func BuildExcelHeaderMap(headerRow []string) map[string]int {
 	m := make(map[string]int, len(headerRow))
 	for i, h := range headerRow {
-		key := strings.TrimSpace(h)
-		key = strings.ReplaceAll(key, "\n", "")
-		key = strings.ReplaceAll(key, " ", "")
-		key = strings.ReplaceAll(key, "（", "(")
-		key = strings.ReplaceAll(key, "）", ")")
+		key := CleanHeaderKey(h)
 		if key != "" {
 			m[key] = i
 		}
@@ -364,7 +360,14 @@ func (imp *ExcelImporter) searchAndBuildHeaderMap() {
 
 // normalizeHeaderKey 格式化表头 key 剔除多余格式
 func (imp *ExcelImporter) normalizeHeaderKey(name string) string {
+	return CleanHeaderKey(name)
+}
+
+// CleanHeaderKey 清洗表头字符，提供全局一致性标准化清洗（过滤空格、回车换行以及中英文括号）
+func CleanHeaderKey(name string) string {
 	key := strings.TrimSpace(name)
+	key = strings.ReplaceAll(key, "\r", "")
+	key = strings.ReplaceAll(key, "\n", "")
 	key = strings.ReplaceAll(key, " ", "")
 	key = strings.ReplaceAll(key, "（", "(")
 	key = strings.ReplaceAll(key, "）", ")")
