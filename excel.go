@@ -292,7 +292,7 @@ func BuildExcelHeaderMap(headerRow []string) map[string]int {
 	return m
 }
 
-// searchAndBuildHeaderMap 扫描前 5 行进行智能表头寻址
+// searchAndBuildHeaderMap 扫描前 5 行进行智能表头寻址并支持双行表头自适应合并
 func (imp *ExcelImporter) searchAndBuildHeaderMap() {
 	keywords := []string{"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number", "姓名", "客户名", "客户"}
 	maxScanRows := 5
@@ -300,24 +300,66 @@ func (imp *ExcelImporter) searchAndBuildHeaderMap() {
 		maxScanRows = len(imp.currentRows)
 	}
 
+	foundRowIndex := -1
 	for i := 0; i < maxScanRows; i++ {
 		m := BuildExcelHeaderMap(imp.currentRows[i])
 		for _, kw := range keywords {
 			colKey := imp.normalizeHeaderKey(kw)
 			if _, ok := m[colKey]; ok {
-				imp.headerMap = m
-				imp.headerRowIndex = i
-				return
+				foundRowIndex = i
+				break
+			}
+		}
+		if foundRowIndex >= 0 {
+			break
+		}
+	}
+
+	if foundRowIndex == -1 {
+		foundRowIndex = 1
+		if len(imp.currentRows) <= foundRowIndex {
+			foundRowIndex = 0
+		}
+	}
+
+	m := make(map[string]int)
+
+	// 如果表头定位在首行 (索引 0)，说明是包含“大类(第1行) / 小类(第2行)”的双表头结构
+	if foundRowIndex == 0 && len(imp.currentRows) > 1 {
+		imp.headerRowIndex = 1 // 真正的数据起始行设为第二行，数据从索引 2（第 3 行）起读取
+
+		// 优先把第二行子表头（如 20'GP、长、宽、高）映射为索引
+		row2 := imp.currentRows[1]
+		for idx, val := range row2 {
+			key := imp.normalizeHeaderKey(val)
+			if key != "" {
+				m[key] = idx
+			}
+		}
+
+		// 再把第一行大分类表头（如“装柜量”、“纸箱尺寸”）合并进来
+		row1 := imp.currentRows[0]
+		for idx, val := range row1 {
+			key := imp.normalizeHeaderKey(val)
+			if key != "" {
+				if _, exists := m[key]; !exists {
+					m[key] = idx
+				}
+			}
+		}
+	} else {
+		// 常规单表头
+		imp.headerRowIndex = foundRowIndex
+		row := imp.currentRows[foundRowIndex]
+		for idx, val := range row {
+			key := imp.normalizeHeaderKey(val)
+			if key != "" {
+				m[key] = idx
 			}
 		}
 	}
 
-	defaultHeaderIndex := 1
-	if len(imp.currentRows) <= defaultHeaderIndex {
-		defaultHeaderIndex = 0
-	}
-	imp.headerMap = BuildExcelHeaderMap(imp.currentRows[defaultHeaderIndex])
-	imp.headerRowIndex = defaultHeaderIndex
+	imp.headerMap = m
 }
 
 // normalizeHeaderKey 格式化表头 key 剔除多余格式
