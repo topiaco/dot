@@ -105,6 +105,18 @@ func (imp *ExcelImporter) SelectSheetByIndex(index int) error {
 	return imp.SelectSheetByName(sheetList[index])
 }
 
+// SelectSheetWithFallback 尝试定位指定的 Sheet 名称。若存在则加载之，若不存在则默认加载物理首张 Sheet (索引 0)
+func (imp *ExcelImporter) SelectSheetWithFallback(sheetName string) error {
+	sheets := imp.GetSheetList()
+	for _, name := range sheets {
+		if strings.EqualFold(name, sheetName) {
+			return imp.SelectSheetByName(name)
+		}
+	}
+	return imp.SelectSheetByIndex(0)
+}
+
+
 // GetCurrentSheetName 获取当前处于活动状态 of Sheet 名字
 func (imp *ExcelImporter) GetCurrentSheetName() string {
 	return imp.currentSheet
