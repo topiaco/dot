@@ -152,6 +152,40 @@ func (imp *ExcelImporter) GetCellValueFallback(row []string, colNames ...string)
 	return ""
 }
 
+// GetCellValueByOffset 根据表头名称加上物理列偏移获取单元格值
+func (imp *ExcelImporter) GetCellValueByOffset(row []string, colName string, offset int) string {
+	if imp.headerMap == nil {
+		return ""
+	}
+	colKey := imp.normalizeHeaderKey(colName)
+	baseIdx, ok := imp.headerMap[colKey]
+	if !ok {
+		return ""
+	}
+
+	targetIdx := baseIdx + offset
+	if targetIdx < 0 || targetIdx >= len(row) {
+		return ""
+	}
+
+	val := strings.TrimSpace(row[targetIdx])
+	if strings.EqualFold(val, "NULL") || val == "/" || val == "\\" || strings.EqualFold(val, "#N/A") {
+		return ""
+	}
+	return val
+}
+
+// GetCellValueFallbackByOffset 根据候选表头别名及物理列偏移获取单元格值
+func (imp *ExcelImporter) GetCellValueFallbackByOffset(row []string, offset int, colNames ...string) string {
+	for _, name := range colNames {
+		if val := imp.GetCellValueByOffset(row, name, offset); val != "" {
+			return val
+		}
+	}
+	return ""
+}
+
+
 // GetCellValueAsInt 获取整型单元格值，转换失败返回默认值
 func (imp *ExcelImporter) GetCellValueAsInt(row []string, colName string, defaultVal int) int {
 	val := imp.GetCellValue(row, colName)
