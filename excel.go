@@ -302,10 +302,7 @@ func BuildExcelHeaderMap(headerRow []string) map[string]int {
 
 // searchAndBuildHeaderMap 扫描前 5 行进行智能表头寻址并支持双行表头自适应合并
 func (imp *ExcelImporter) searchAndBuildHeaderMap() {
-	keywords := []string{
-		"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number",
-		"姓名", "客户名", "客户", "客户代码", "客户名称", "联系人", "手机号码", "Email", "职务", "行号", "客户级别",
-	}
+	keywords := []string{"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number", "姓名", "客户名", "客户"}
 	maxScanRows := 5
 	if len(imp.currentRows) < maxScanRows {
 		maxScanRows = len(imp.currentRows)
@@ -326,18 +323,11 @@ func (imp *ExcelImporter) searchAndBuildHeaderMap() {
 		}
 	}
 
-	if foundRowIndex == -1 {
-		foundRowIndex = 1
-		if len(imp.currentRows) <= foundRowIndex {
-			foundRowIndex = 0
-		}
-	}
-
 	m := make(map[string]int)
 
-	// 如果表头定位在首行 (索引 0)，说明是包含“大类(第1行) / 小类(第2行)”的双表头结构
+	// 如果通过产品库专属关键字匹配到了首行 (索引 0)，说明是包含“大类(第1行) / 小类(第2行)”的双表头结构
 	if foundRowIndex == 0 && len(imp.currentRows) > 1 {
-		imp.headerRowIndex = 1 // 真正的数据起始行设为第二行，数据从索引 2（第 3 行）起读取
+		imp.headerRowIndex = 1 // 双表头模式下，表头行设为 1，数据从索引 2（第 3 行）起读取
 
 		// 优先把第二行子表头（如 20'GP、长、宽、高）映射为索引
 		row2 := imp.currentRows[1]
@@ -359,18 +349,47 @@ func (imp *ExcelImporter) searchAndBuildHeaderMap() {
 			}
 		}
 	} else {
-		// 常规单表头
-		imp.headerRowIndex = foundRowIndex
-		row := imp.currentRows[foundRowIndex]
-		for idx, val := range row {
-			key := imp.normalizeHeaderKey(val)
-			if key != "" {
-				m[key] = idx
+		// 常规单表头：如果匹配不到关键字，则兜底为首行 (索引 0) 的单行表头结构，数据从第 2 行开始读取
+		targetRowIndex := foundRowIndex
+		if targetRowIndex == -1 {
+			targetRowIndex = 0
+		}
+
+		imp.headerRowIndex = targetRowIndex
+		if targetRowIndex < len(imp.currentRows) {
+			row := imp.currentRows[targetRowIndex]
+			for idx, val := range row {
+				key := imp.normalizeHeaderKey(val)
+				if key != "" {
+					m[key] = idx
+				}
 			}
 		}
 	}
 
 	imp.headerMap = m
+}
+
+// SetHeaderRowIndex 显式设置表头行索引，并重新构建常规单表头映射，且数据起始行自动顺延至其下一行 (index + 1)
+func (imp *ExcelImporter) SetHeaderRowIndex(index int) error {
+	if imp.excelFile == nil || imp.currentSheet == "" {
+		return errors.New("excel 句柄未初始化或未选择 Sheet")
+	}
+	if index < 0 || index >= len(imp.currentRows) {
+		return fmt.Errorf("表头行索引 %d 越界", index)
+	}
+
+	imp.headerRowIndex = index
+	m := make(map[string]int)
+	row := imp.currentRows[index]
+	for idx, val := range row {
+		key := imp.normalizeHeaderKey(val)
+		if key != "" {
+			m[key] = idx
+		}
+	}
+	imp.headerMap = m
+	return nil
 }
 
 // normalizeHeaderKey 格式化表头 key 剔除多余格式
