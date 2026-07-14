@@ -302,7 +302,10 @@ func BuildExcelHeaderMap(headerRow []string) map[string]int {
 
 // searchAndBuildHeaderMap 扫描前 5 行进行智能表头寻址并支持双行表头自适应合并
 func (imp *ExcelImporter) searchAndBuildHeaderMap() {
-	keywords := []string{"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number", "姓名", "客户名", "客户"}
+	keywords := []string{
+		"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number",
+		"姓名", "客户名", "客户", "客户代码", "客户名称", "联系人", "手机号码", "Email", "职务", "行号", "客户级别",
+	}
 	maxScanRows := 5
 	if len(imp.currentRows) < maxScanRows {
 		maxScanRows = len(imp.currentRows)
