@@ -300,77 +300,23 @@ func BuildExcelHeaderMap(headerRow []string) map[string]int {
 	return m
 }
 
-// searchAndBuildHeaderMap 扫描前 5 行进行智能表头寻址并支持双行表头自适应合并
+// searchAndBuildHeaderMap 默认以第 1 行 (索引 0) 作为常规单表头初始化，数据起始行默认为第 2 行 (索引 1)
 func (imp *ExcelImporter) searchAndBuildHeaderMap() {
-	keywords := []string{"货号", "公司货号", "产品货号", "item_no", "设计号", "design_number", "姓名", "客户名", "客户"}
-	maxScanRows := 5
-	if len(imp.currentRows) < maxScanRows {
-		maxScanRows = len(imp.currentRows)
-	}
-
-	foundRowIndex := -1
-	for i := 0; i < maxScanRows; i++ {
-		m := BuildExcelHeaderMap(imp.currentRows[i])
-		for _, kw := range keywords {
-			colKey := imp.normalizeHeaderKey(kw)
-			if _, ok := m[colKey]; ok {
-				foundRowIndex = i
-				break
-			}
-		}
-		if foundRowIndex >= 0 {
-			break
-		}
-	}
-
+	imp.headerRowIndex = 0
 	m := make(map[string]int)
-
-	// 如果通过产品库专属关键字匹配到了首行 (索引 0)，说明是包含“大类(第1行) / 小类(第2行)”的双表头结构
-	if foundRowIndex == 0 && len(imp.currentRows) > 1 {
-		imp.headerRowIndex = 1 // 双表头模式下，表头行设为 1，数据从索引 2（第 3 行）起读取
-
-		// 优先把第二行子表头（如 20'GP、长、宽、高）映射为索引
-		row2 := imp.currentRows[1]
-		for idx, val := range row2 {
+	if len(imp.currentRows) > 0 {
+		row := imp.currentRows[0]
+		for idx, val := range row {
 			key := imp.normalizeHeaderKey(val)
 			if key != "" {
 				m[key] = idx
 			}
 		}
-
-		// 再把第一行大分类表头（如“装柜量”、“纸箱尺寸”）合并进来
-		row1 := imp.currentRows[0]
-		for idx, val := range row1 {
-			key := imp.normalizeHeaderKey(val)
-			if key != "" {
-				if _, exists := m[key]; !exists {
-					m[key] = idx
-				}
-			}
-		}
-	} else {
-		// 常规单表头：如果匹配不到关键字，则兜底为首行 (索引 0) 的单行表头结构，数据从第 2 行开始读取
-		targetRowIndex := foundRowIndex
-		if targetRowIndex == -1 {
-			targetRowIndex = 0
-		}
-
-		imp.headerRowIndex = targetRowIndex
-		if targetRowIndex < len(imp.currentRows) {
-			row := imp.currentRows[targetRowIndex]
-			for idx, val := range row {
-				key := imp.normalizeHeaderKey(val)
-				if key != "" {
-					m[key] = idx
-				}
-			}
-		}
 	}
-
 	imp.headerMap = m
 }
 
-// SetHeaderRowIndex 显式设置表头行索引，并重新构建常规单表头映射，且数据起始行自动顺延至其下一行 (index + 1)
+// SetHeaderRowIndex 显式设置单行表头行索引，重新构建常规单表头映射，且数据起始行自动顺延至其下一行 (index + 1)
 func (imp *ExcelImporter) SetHeaderRowIndex(index int) error {
 	if imp.excelFile == nil || imp.currentSheet == "" {
 		return errors.New("excel 句柄未初始化或未选择 Sheet")
@@ -388,6 +334,42 @@ func (imp *ExcelImporter) SetHeaderRowIndex(index int) error {
 			m[key] = idx
 		}
 	}
+	imp.headerMap = m
+	return nil
+}
+
+// SetDoubleHeaderRows 显式设置并合并双行表头（row1Index 作为大分类表头，row2Index 作为细分子表头），数据起始行自动顺延至其下一行 (row2Index + 1)
+func (imp *ExcelImporter) SetDoubleHeaderRows(row1Index, row2Index int) error {
+	if imp.excelFile == nil || imp.currentSheet == "" {
+		return errors.New("excel 句柄未初始化或未选择 Sheet")
+	}
+	if row1Index < 0 || row1Index >= len(imp.currentRows) || row2Index < 0 || row2Index >= len(imp.currentRows) {
+		return fmt.Errorf("表头行索引越界: row1=%d, row2=%d", row1Index, row2Index)
+	}
+
+	imp.headerRowIndex = row2Index
+	m := make(map[string]int)
+
+	// 优先把第二行子表头（如 20'GP、长、宽、高）映射为索引
+	row2 := imp.currentRows[row2Index]
+	for idx, val := range row2 {
+		key := imp.normalizeHeaderKey(val)
+		if key != "" {
+			m[key] = idx
+		}
+	}
+
+	// 再把第一行大分类表头（如“装柜量”、“纸箱尺寸”）合并进来
+	row1 := imp.currentRows[row1Index]
+	for idx, val := range row1 {
+		key := imp.normalizeHeaderKey(val)
+		if key != "" {
+			if _, exists := m[key]; !exists {
+				m[key] = idx
+			}
+		}
+	}
+
 	imp.headerMap = m
 	return nil
 }
