@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -31,12 +32,34 @@ type ExcelImporter struct {
 	headerRowIndex int
 }
 
-// NewExcelImporter 仅负责打开 Excel 文件描述符
+// NewExcelImporter 仅负责打开 Excel 文件描述符（支持本地路径与 HTTP/HTTPS 远端链接）
 func NewExcelImporter(filePath string) (*ExcelImporter, error) {
-	f, err := excelize.OpenFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("打开 Excel 文件失败: %w", err)
+	var f *excelize.File
+	var err error
+
+	filePathTrimmed := strings.TrimSpace(filePath)
+	if strings.HasPrefix(filePathTrimmed, "http://") || strings.HasPrefix(filePathTrimmed, "https://") {
+		resp, httpErr := http.Get(filePathTrimmed)
+		if httpErr != nil {
+			return nil, fmt.Errorf("下载远端 Excel 文件失败: %w", httpErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("下载远端 Excel 文件返回状态码异常: %d", resp.StatusCode)
+		}
+
+		f, err = excelize.OpenReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("解析远端 Excel 数据流失败: %w", err)
+		}
+	} else {
+		f, err = excelize.OpenFile(filePathTrimmed)
+		if err != nil {
+			return nil, fmt.Errorf("打开本地 Excel 文件失败: %w", err)
+		}
 	}
+
 	return &ExcelImporter{
 		filePath:  filePath,
 		excelFile: f,
