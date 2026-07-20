@@ -402,3 +402,13 @@ func (imp *ExcelImporter) isEmptyRow(row []string) bool {
 	}
 	return true
 }
+
+// FindSheetName 在 Excel 工作簿中模糊匹配包含指定关键字的 Sheet 名称
+func FindSheetName(f *excelize.File, keyword string) string {
+	for _, name := range f.GetSheetList() {
+		if strings.Contains(strings.ToLower(name), strings.ToLower(keyword)) {
+			return name
+		}
+	}
+	return ""
+}
